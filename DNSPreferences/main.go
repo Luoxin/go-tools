@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -40,8 +41,10 @@ func (p *NameserverCheck) PingSelf() error {
 	port := 53
 	protocol := ping.TCP
 
-	if utils.IsIp(p.NameServer) {
+	if utils.IsIpV4(p.NameServer) {
 		host = p.NameServer
+	} else if utils.IsIpV6(p.NameServer) {
+		host = fmt.Sprintf("[%s]", strings.TrimPrefix(strings.TrimPrefix(p.NameServer, "["), "]"))
 	} else {
 		u, err := url.Parse(p.NameServer)
 		if err != nil {
