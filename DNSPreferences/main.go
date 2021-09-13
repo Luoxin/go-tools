@@ -6,7 +6,6 @@ import (
 	"github.com/Luoxin/Eutamias/utils"
 	"github.com/apex/log"
 	"github.com/cloverstd/tcping/ping"
-	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -102,17 +101,19 @@ func (p *NameserverCheck) PingSelf() error {
 		//	}
 		//}
 
-		ip, err := net.LookupIP(u.Hostname())
-		if err != nil {
-			log.Errorf("err:%v", err)
-			return err
-		}
+		//ip, err := net.LookupIP(u.Hostname())
+		//if err != nil {
+		//	log.Errorf("err:%v", err)
+		//	return err
+		//}
+		//
+		//if len(ip) == 0 {
+		//	return errors.New("not found ips")
+		//}
+		//
+		//host = ip[0].String()
 
-		if len(ip) == 0 {
-			return errors.New("not found ips")
-		}
-
-		host = ip[0].String()
+		host = u.Hostname()
 	}
 
 	target := ping.Target{
