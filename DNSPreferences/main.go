@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Luoxin/Eutamias/utils"
+	"github.com/alexflint/go-arg"
 	"github.com/apex/log"
 	"github.com/cloverstd/tcping/ping"
+	"math/rand"
 	"net/url"
 	"strconv"
 	"strings"
@@ -17,9 +19,10 @@ const timeout = time.Millisecond * 500
 type NameserverCheck struct {
 	NameServer string
 
-	IsFail   bool
-	PingAvg  time.Duration
-	PingPate float64
+	PingTotalDuration time.Duration
+	PingFailed        uint64
+	PingSuccess       uint64
+	PingCounter       uint64
 }
 
 func NewNameserverCheck(nameserver string) *NameserverCheck {
@@ -30,7 +33,6 @@ func NewNameserverCheck(nameserver string) *NameserverCheck {
 
 func (p *NameserverCheck) Check() {
 	if p.PingSelf() != nil {
-		p.IsFail = true
 		return
 	}
 }
@@ -90,29 +92,6 @@ func (p *NameserverCheck) PingSelf() error {
 			protocol = ping.HTTPS
 		}
 
-		//switch u.Scheme {
-		//case "tls":
-		//	if strings.Contains(u.Path, "@") {
-		//		u, err = url.Parse(strings.Replace(p.NameServer, "@", ":", 1))
-		//		if err != nil {
-		//			log.Errorf("err:%v", err)
-		//			return err
-		//		}
-		//	}
-		//}
-
-		//ip, err := net.LookupIP(u.Hostname())
-		//if err != nil {
-		//	log.Errorf("err:%v", err)
-		//	return err
-		//}
-		//
-		//if len(ip) == 0 {
-		//	return errors.New("not found ips")
-		//}
-		//
-		//host = ip[0].String()
-
 		host = u.Hostname()
 	}
 
@@ -123,6 +102,7 @@ func (p *NameserverCheck) PingSelf() error {
 		Counter:  10,
 		Port:     port,
 		Protocol: protocol,
+		Proxy:    cmdArgs.Proxy,
 	}
 
 	pinger := ping.NewTCPing()
@@ -133,36 +113,56 @@ func (p *NameserverCheck) PingSelf() error {
 		return errors.New("ping not working")
 	}
 
-	p.PingAvg = pinger.Result().Avg()
-	p.PingPate = float64(pinger.Result().Failed()) / float64(pinger.Result().Counter)
+	p.PingFailed += uint64(pinger.Result().Failed())
+	p.PingSuccess += uint64(pinger.Result().SuccessCounter)
+	p.PingCounter += uint64(pinger.Result().Counter)
+	p.PingTotalDuration += pinger.Result().TotalDuration
 
 	return nil
 }
 
+var cmdArgs struct {
+	Proxy string `arg:"-p,--proxy" help:"check with proxy"`
+}
+
 func main() {
+	arg.MustParse(&cmdArgs)
+
 	var nameserverCheckList NameserverCheckList
 
 	nameserverList.Each(func(nameserver string) {
 		check := NewNameserverCheck(nameserver)
-		check.Check()
 		nameserverCheckList = append(nameserverCheckList, check)
 	})
 
 	nameserverCheckList.
-		FilterNot(func(check *NameserverCheck) bool {
-			return check.IsFail
+		Shuffle(rand.NewSource(time.Now().UnixNano())).
+		Each(func(check *NameserverCheck) {
+			check.Check()
+		}).
+		Shuffle(rand.NewSource(time.Now().UnixNano())).
+		Each(func(check *NameserverCheck) {
+			check.Check()
+		}).
+		Shuffle(rand.NewSource(time.Now().UnixNano())).
+		Each(func(check *NameserverCheck) {
+			check.Check()
+		}).
+		Shuffle(rand.NewSource(time.Now().UnixNano())).
+		Each(func(check *NameserverCheck) {
+			check.Check()
 		}).
 		Filter(func(check *NameserverCheck) bool {
-			return check.PingPate == 0
+			return check.PingFailed == 0 && check.PingCounter > 0
 		}).
 		//SortUsing(func(a, b *NameserverCheck) bool {
 		//	return a.PingPate > b.PingPate
 		//}).
 		SortUsing(func(a, b *NameserverCheck) bool {
-			return a.PingAvg < b.PingAvg
+			return a.PingTotalDuration/time.Duration(a.PingSuccess) < b.PingTotalDuration/time.Duration(b.PingSuccess)
 		}).
 		Each(func(check *NameserverCheck) {
-			//fmt.Println(fmt.Sprintf("%v——%v——%v", check.NameServer, check.PingAvg, check.PingPate))
-			fmt.Println(check.NameServer)
+			fmt.Println(fmt.Sprintf("%v——%v", check.NameServer, check.PingTotalDuration/time.Duration(check.PingSuccess)))
+			//fmt.Println(check.NameServer)
 		})
 }
