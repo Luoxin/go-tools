@@ -66,16 +66,16 @@ func (p *NameserverCheck) Query() error {
 		}
 
 		switch u.Scheme {
-		case "http", "https":
+		case "":
 			client, err = dns.NewDoTResolver(p.NameServer)
 			if err != nil {
 				log.Debugf("err:%v", err)
 				return err
 			}
-		case "", "tls":
+		case "tls", "http", "https":
 			fallthrough
 		default:
-			client, err = dns.NewDoTResolver(p.NameServer)
+			client, err = dns.NewDoHResolver(p.NameServer)
 			if err != nil {
 				log.Debugf("err:%v", err)
 				return err

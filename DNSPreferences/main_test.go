@@ -47,10 +47,7 @@ func TestNameserverCheck(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			check := NewNameserverCheck(tt.args.nameserver)
 			check.Check()
-			//t.Logf("%v check result %v", tt.name, check.IsFail)
-			if check.IsFail {
-				t.Errorf("%v check fail", tt.name)
-			}
+			t.Logf("%v check result %+v", tt.name, check)
 		})
 	}
 }
