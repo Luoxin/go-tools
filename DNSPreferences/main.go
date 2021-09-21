@@ -40,13 +40,9 @@ func NewNameserverCheck(nameserver string) *NameserverCheck {
 }
 
 func (p *NameserverCheck) Check() {
-	if p.PingSelf() != nil {
-		return
-	}
+	_ = p.PingSelf()
 
-	if p.Query() != nil {
-		return
-	}
+	_ = p.Query()
 }
 
 func (p *NameserverCheck) Query() error {
@@ -95,9 +91,9 @@ func (p *NameserverCheck) Query() error {
 
 	target := ping.Target{
 		Timeout:  timeout,
-		Interval: time.Nanosecond,
+		Interval: time.Second * 3,
 		Host:     "baidu.com",
-		Counter:  10,
+		Counter:  3,
 		Port:     443,
 		Protocol: ping.HTTPS,
 	}
@@ -178,7 +174,7 @@ func (p *NameserverCheck) PingSelf() error {
 
 	target := ping.Target{
 		Timeout:  timeout,
-		Interval: time.Nanosecond,
+		Interval: time.Second,
 		Host:     host,
 		Counter:  10,
 		Port:     port,
