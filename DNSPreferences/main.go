@@ -230,10 +230,16 @@ func main() {
 			check.Check()
 		}).
 		FilterNot(func(check *NameserverCheck) bool {
-			return check.PingCounter == 0 || check.DnsPingCounter == 0
+			return check.PingCounter == 0 && check.DnsPingCounter == 0
 		}).
-		Filter(func(check *NameserverCheck) bool {
-			return check.PingFailed == 0 && check.DnsPingFailed == 0
+		FilterNot(func(check *NameserverCheck) bool {
+			return check.DnsPingCounter == 0
+		}).
+		FilterNot(func(check *NameserverCheck) bool {
+			return check.PingFailed == check.DnsPingCounter && check.DnsPingFailed == check.DnsPingCounter
+		}).
+		FilterNot(func(check *NameserverCheck) bool {
+			return check.DnsPingFailed == check.DnsPingCounter
 		}).
 		SortUsing(func(a, b *NameserverCheck) bool {
 			return a.PingTotalDuration/time.Duration(a.PingSuccess) < b.PingTotalDuration/time.Duration(b.PingSuccess)
