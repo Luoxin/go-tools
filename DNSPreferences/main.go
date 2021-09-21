@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/Luoxin/Eutamias/utils"
 	"github.com/apex/log"
 	"github.com/cloverstd/tcping/ping"
+	"github.com/ncruces/go-dns"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -33,6 +36,78 @@ func (p *NameserverCheck) Check() {
 		p.IsFail = true
 		return
 	}
+
+	if p.Query() != nil {
+		p.IsFail = true
+		return
+	}
+}
+
+func (p *NameserverCheck) Query() error {
+	var client *net.Resolver
+	var err error
+	if utils.IsIp(p.NameServer) {
+		client, err = dns.NewDoTResolver(p.NameServer)
+		if err != nil {
+			log.Debugf("err:%v", err)
+			return err
+		}
+	} else {
+		u, err := url.Parse(p.NameServer)
+		if err != nil {
+			log.Errorf("err:%v", err)
+			return err
+		}
+
+		switch u.Scheme {
+		case "http", "https":
+			client, err = dns.NewDoTResolver(p.NameServer)
+			if err != nil {
+				log.Debugf("err:%v", err)
+				return err
+			}
+		case "", "tls":
+			fallthrough
+		default:
+			client, err = dns.NewDoTResolver(p.NameServer)
+			if err != nil {
+				log.Debugf("err:%v", err)
+				return err
+			}
+		}
+	}
+
+	ips, err := client.LookupIP(context.TODO(), "ip4", "baidu.com")
+	if err != nil {
+		log.Errorf("err:%v", err)
+		return err
+	}
+
+	if len(ips) == 0 {
+		return errors.New("not found ip")
+	}
+
+	target := ping.Target{
+		Timeout:  timeout,
+		Interval: time.Nanosecond,
+		Host:     "baidu.com",
+		Counter:  10,
+		Port:     443,
+		Protocol: ping.HTTPS,
+	}
+
+	pinger := ping.NewTCPing()
+	pinger.SetTarget(&target)
+	pingerDone := pinger.Start()
+	<-pingerDone
+	if pinger.Result().Failed() == pinger.Result().Counter {
+		return errors.New("ping not working")
+	}
+
+	p.PingAvg = pinger.Result().Avg()
+	p.PingPate = float64(pinger.Result().Failed()) / float64(pinger.Result().Counter)
+
+	return nil
 }
 
 func (p *NameserverCheck) PingSelf() error {

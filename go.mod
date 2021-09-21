@@ -7,6 +7,7 @@ require (
 	github.com/apex/log v1.9.0
 	github.com/cloverstd/tcping v0.1.2-0.20210228121234-88c898f77c78
 	github.com/elliotchance/pie v1.38.2
+	github.com/ncruces/go-dns v1.1.0
 )
 
 require (
