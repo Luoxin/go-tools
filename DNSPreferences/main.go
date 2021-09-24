@@ -218,18 +218,18 @@ func main() {
 		Each(func(check *NameserverCheck) {
 			check.Check()
 		}).
-		Shuffle(rand.NewSource(time.Now().UnixNano())).
-		Each(func(check *NameserverCheck) {
-			check.Check()
-		}).
-		Shuffle(rand.NewSource(time.Now().UnixNano())).
-		Each(func(check *NameserverCheck) {
-			check.Check()
-		}).
-		Shuffle(rand.NewSource(time.Now().UnixNano())).
-		Each(func(check *NameserverCheck) {
-			check.Check()
-		}).
+		//Shuffle(rand.NewSource(time.Now().UnixNano())).
+		//Each(func(check *NameserverCheck) {
+		//	check.Check()
+		//}).
+		//Shuffle(rand.NewSource(time.Now().UnixNano())).
+		//Each(func(check *NameserverCheck) {
+		//	check.Check()
+		//}).
+		//Shuffle(rand.NewSource(time.Now().UnixNano())).
+		//Each(func(check *NameserverCheck) {
+		//	check.Check()
+		//}).
 		//FilterNot(func(check *NameserverCheck) bool {
 		//	return check.PingCounter == 0 && check.DnsPingCounter == 0
 		//}).
@@ -249,7 +249,7 @@ func main() {
 			return a.DnsQueryDelay > b.DnsQueryDelay
 		}).
 		Each(func(check *NameserverCheck) {
-			fmt.Println(fmt.Sprintf("%v——%v", check.NameServer, check.DnsQueryDelay))
-			//fmt.Println(check.NameServer)
+			//fmt.Println(fmt.Sprintf("%v——%v", check.NameServer, check.DnsQueryDelay))
+			fmt.Println(check.NameServer)
 		})
 }
