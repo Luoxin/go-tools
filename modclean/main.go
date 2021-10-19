@@ -85,6 +85,12 @@ func main() {
 
 		remove := func(val FileInfo) {
 			bar.UpdateText(pterm.FgYellow.Sprintf("will remove %s", val.FilePath))
+
+			size := DirSizeB(val.FilePath)
+			if size == 0 {
+				size = val.Size
+			}
+
 			err = os.RemoveAll(val.FilePath)
 			if err != nil {
 				pterm.Error.Printfln("err:%v", err)
@@ -92,10 +98,10 @@ func main() {
 			}
 
 			allRemoveCount++
-			allRemoveSize += val.Size
+			allRemoveSize += size
 
 			removeCount++
-			removeSize += val.Size
+			removeSize += size
 		}
 
 		for _, val := range values {
@@ -131,4 +137,31 @@ func formatFileSize(fileSize int64) (size string) {
 	} else { //if fileSize < (1024 * 1024 * 1024 * 1024 * 1024 * 1024)
 		return fmt.Sprintf("%.2fEB", float64(fileSize)/float64(1024*1024*1024*1024*1024))
 	}
+}
+
+func DirSizeB(path string) int64 {
+	var size int64
+	_ = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size
+}
+
+func getFileSize(path string) int64 {
+	if !exists(path) {
+		return 0
+	}
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return fileInfo.Size()
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil || os.IsExist(err)
 }
