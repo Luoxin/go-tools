@@ -94,5 +94,5 @@ func main() {
 		}
 	}
 
-	log.Infof("find %v pkg, %v is removed", len(m), removeCount)
+	log.Infof("find %v pkg, %v version is removed", len(m), removeCount)
 }
