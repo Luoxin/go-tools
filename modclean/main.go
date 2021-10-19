@@ -116,10 +116,16 @@ func main() {
 			}
 		}
 
-		bar.Success(pterm.FgLightGreen.Sprintf("%v clean %v version size %v", key, removeCount, formatFileSize(removeSize)))
+		if removeCount > 0 {
+			bar.Success(pterm.FgLightGreen.Sprintf("%v clean %v version size %v", key, removeCount, formatFileSize(removeSize)))
+		}
 	}
 
-	bar.Success(pterm.FgLightGreen.Sprintf("find %v pkg, %v version is removed siz %v", len(m), allRemoveCount, formatFileSize(allRemoveSize)))
+	if allRemoveCount > 0 {
+		bar.Success(pterm.FgLightGreen.Sprintf("find %v pkg, %v version removed siz %v", len(m), allRemoveCount, formatFileSize(allRemoveSize)))
+	} else {
+		bar.Success(pterm.FgLightYellow.Sprintf("find %v pkg, 0 version removed", len(m)))
+	}
 }
 
 func formatFileSize(fileSize int64) (size string) {
