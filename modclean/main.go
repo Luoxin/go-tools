@@ -19,6 +19,16 @@ type FileInfo struct {
 }
 
 func main() {
+	ptermLogo, _ := pterm.DefaultBigText.WithLetters(
+		pterm.NewLettersFromStringWithStyle("mod", pterm.NewStyle(pterm.FgLightCyan)),
+		pterm.NewLettersFromStringWithStyle("cache", pterm.NewStyle(pterm.FgLightYellow)),
+		pterm.NewLettersFromStringWithStyle("clean", pterm.NewStyle(pterm.FgLightMagenta))).
+		Srender()
+
+	pterm.DefaultCenter.Print(ptermLogo)
+
+	pterm.DefaultCenter.Print(pterm.DefaultHeader.WithFullWidth().WithBackgroundStyle(pterm.NewStyle(pterm.BgLightBlue)).WithMargin(10).Sprint("go.mod cache clean for old version cache"))
+
 	cmd := exec.Command("go", "env", "GOMODCACHE")
 	cmd.Env = os.Environ()
 
