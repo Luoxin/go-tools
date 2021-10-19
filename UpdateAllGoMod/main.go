@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/Luoxin/Eutamias/utils"
 	nested "github.com/antonfisher/nested-logrus-formatter"
+	"github.com/darabuchi/enputi/utils"
 	"github.com/eddieivan01/nic"
 	"github.com/gookit/color"
 	"github.com/rogpeppe/go-internal/modfile"

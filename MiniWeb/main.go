@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/gofiber/fiber/v2"
 	log "github.com/sirupsen/logrus"
 	"time"
 )
@@ -44,8 +43,7 @@ func main() {
 		log.Info(ctx.String())
 		log.Info(string(ctx.Body()))
 
-		ctx.Request().Header.
-			log.Info(ctx.Request().Header)
+		log.Info(ctx.Request().Header)
 		return ctx.SendStatus(200)
 	})
 
