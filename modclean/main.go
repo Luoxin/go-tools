@@ -53,7 +53,7 @@ func main() {
 		}
 
 		if !info.IsDir() {
-			bar.UpdateText(pterm.FgLightMagenta.Sprintf("%v is not dir,skip", info.Name()))
+			//bar.UpdateText(pterm.FgLightMagenta.Sprintf("%v is not dir,skip", info.Name()))
 			return nil
 		}
 
