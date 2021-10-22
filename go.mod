@@ -11,6 +11,7 @@ require (
 	github.com/eddieivan01/nic v0.3.1
 	github.com/elliotchance/pie v1.39.0
 	github.com/gookit/color v1.5.0
+	github.com/karrick/godirwalk v1.16.1
 	github.com/ncruces/go-dns v1.1.0
 	github.com/pterm/pterm v0.12.31
 	github.com/rogpeppe/go-internal v1.8.0
