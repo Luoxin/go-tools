@@ -67,7 +67,7 @@ type GoEnv struct {
 }
 
 var cmdArgs struct {
-	SacnModFile bool `arg:"-f,--sacn_mod_file" help:"sacn go.mod"`
+	DeepClean bool `arg:"-d,--deep-clean" help:"deep clean"`
 }
 
 func main() {
@@ -166,7 +166,8 @@ func main() {
 	bar.Success("scanned go mod cache")
 
 	usedMap := map[string]bool{}
-	if cmdArgs.SacnModFile {
+	usedModMap := map[string]bool{}
+	if cmdArgs.DeepClean {
 		var diskList pie.Strings
 		switch runtime.GOOS {
 		case "windows":
@@ -180,11 +181,12 @@ func main() {
 		bar, _ := pterm.DefaultSpinner.WithText("scanning go.mod...").Start()
 		var lock sync.Mutex
 
-		add := func(val string) {
-			bar.UpdateText(pterm.FgLightCyan.Sprintf("%v in ued", val))
+		add := func(name, version string) {
+			bar.UpdateText(pterm.FgLightCyan.Sprintf("%s@%s in ued", name, version))
 			lock.Lock()
 			defer lock.Unlock()
-			usedMap[val] = true
+			usedMap[fmt.Sprintf("%s@%s", name, version)] = true
+			usedModMap[name] = true
 		}
 
 		skipList := pie.Strings{
@@ -227,11 +229,11 @@ func main() {
 			}
 
 			for _, value := range mod.Replace {
-				add(fmt.Sprintf("%v@%v", value.New.Path, value.New.Version))
+				add(value.New.Path, value.New.Version)
 			}
 
 			for _, value := range mod.Require {
-				add(fmt.Sprintf("%v@%v", value.Mod.Path, value.Mod.Version))
+				add(value.Mod.Path, value.Mod.Version)
 			}
 
 			return filepath.SkipDir
@@ -285,18 +287,22 @@ func main() {
 			}
 
 			for _, val := range values {
-				if lastVal.ModTime.Sub(val.ModTime) < 0 {
-					if lastVal.FilePath != "" {
-						if !usedMap[fmt.Sprintf("%s@%s", lastVal.Name, lastVal.Version)] {
-							remove(lastVal)
+				if usedModMap[key] {
+					if lastVal.ModTime.Sub(val.ModTime) < 0 {
+						if lastVal.FilePath != "" {
+							if !usedMap[fmt.Sprintf("%s@%s", lastVal.Name, lastVal.Version)] {
+								remove(lastVal)
+							}
+						}
+
+						lastVal = val
+					} else {
+						if !usedMap[fmt.Sprintf("%s@%s", val.Name, val.Version)] {
+							remove(val)
 						}
 					}
-
-					lastVal = val
 				} else {
-					if !usedMap[fmt.Sprintf("%s@%s", val.Name, val.Version)] {
-						remove(val)
-					}
+					remove(val)
 				}
 			}
 
