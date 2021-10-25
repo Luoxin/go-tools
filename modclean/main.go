@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/alexflint/go-arg"
 	"github.com/darabuchi/enputi/utils"
 	"github.com/elliotchance/pie/pie"
 	"github.com/karrick/godirwalk"
 	"github.com/pterm/pterm"
 	"github.com/rogpeppe/go-internal/modfile"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,6 +70,53 @@ var cmdArgs struct {
 	DeepClean bool `arg:"-d,--deep-clean" help:"deep clean"`
 }
 
+type DeviceItem struct {
+	Path  string
+	IsDir bool
+}
+
+type WorkPool struct {
+	data  chan interface{}
+	w     sync.WaitGroup
+	lock  sync.Mutex
+	logic func(i interface{})
+}
+
+func NewWorkPool(max int, logic func(i interface{})) *WorkPool {
+	pool := &WorkPool{
+		data:  make(chan interface{}, 1000),
+		logic: logic,
+	}
+
+	for i := 0; i < max; i++ {
+		exitSign := utils.GetExitSign()
+		go func(exitSign chan os.Signal) {
+			for {
+				select {
+				case x := <-pool.data:
+					pool.logic(x)
+					pool.w.Done()
+				case <-exitSign:
+					return
+				}
+			}
+		}(exitSign)
+	}
+
+	return pool
+}
+
+func (p *WorkPool) Submit(i interface{}) {
+	p.w.Add(1)
+	go func() {
+		p.data <- i
+	}()
+}
+
+func (p *WorkPool) Wait() {
+	p.w.Wait()
+}
+
 func main() {
 	arg.MustParse(&cmdArgs)
 
@@ -108,7 +155,6 @@ func main() {
 
 	cacheMap := map[string][]*ModInfo{}
 
-	var w sync.WaitGroup
 	bar, _ := pterm.DefaultSpinner.WithText("scanning mod cache...").Start()
 	err = godirwalk.Walk(modRoot, &godirwalk.Options{
 		ErrorCallback: func(s string, err error) godirwalk.ErrorAction {
@@ -168,12 +214,14 @@ func main() {
 	usedMap := map[string]bool{}
 	usedModMap := map[string]bool{}
 	if cmdArgs.DeepClean {
+
 		var diskList pie.Strings
 		switch runtime.GOOS {
 		case "windows":
-			for i := 'A'; i < 'Z'; i++ {
-				diskList = append(diskList, fmt.Sprintf("%c:/", i))
-			}
+			//for i := 'A'; i < 'Z'; i++ {
+			//	diskList = append(diskList, fmt.Sprintf("%c:/", i))
+			//}
+			diskList = append(diskList, "D:/")
 		default:
 			diskList = append(diskList, "/")
 		}
@@ -196,36 +244,15 @@ func main() {
 			return s == ""
 		})
 
-		callback := func(path string, info *godirwalk.Dirent) error {
-			if info == nil {
-				bar.Success(path)
-				return nil
-			}
-
-			if skipList.Any(func(value string) bool {
-				return strings.HasPrefix(path, filepath.FromSlash(value))
-			}) {
-				return filepath.SkipDir
-			}
-
-			if info.IsDir() {
-				return nil
-			}
-
-			if info.Name() != "go.mod" {
-				return nil
-			}
-
-			//bar.UpdateText(pterm.FgLightCyan.Sprintf("parse go.mod %v", path))
-
+		parse := func(path string) {
 			modFileBuf, err := utils.FileRead(path)
 			if err != nil {
-				return filepath.SkipDir
+				return
 			}
 
 			mod, err := modfile.Parse(path, []byte(modFileBuf), nil)
 			if err != nil {
-				return filepath.SkipDir
+				return
 			}
 
 			for _, value := range mod.Replace {
@@ -235,27 +262,42 @@ func main() {
 			for _, value := range mod.Require {
 				add(value.Mod.Path, value.Mod.Version)
 			}
-
-			return filepath.SkipDir
 		}
 
-		diskList.Each(func(disk string) {
-			w.Add(1)
-			go func(disk string) {
-				err = godirwalk.Walk(disk, &godirwalk.Options{
-					ErrorCallback: func(s string, err error) godirwalk.ErrorAction {
-						return godirwalk.SkipNode
-					},
-					Unsorted: true,
-					Callback: callback,
-				})
-				if err != nil {
-					//bar.FailPrinter.Printfln("err:%v", err)
+		var pool *WorkPool
+		pool = NewWorkPool(32, func(i interface{}) {
+			basePath := i.(string)
+			bar.UpdateText(basePath)
+
+			if skipList.Any(func(value string) bool {
+				return strings.HasPrefix(basePath, filepath.FromSlash(value))
+			}) {
+				return
+			}
+
+			deviceList := dirList(basePath)
+
+			var dirList []string
+			for _, device := range deviceList {
+				if strings.HasSuffix(device.Path, "/go.mod") {
+					parse(device.Path)
 					return
 				}
-			}(disk)
+
+				if device.IsDir {
+					dirList = append(dirList, device.Path)
+				}
+			}
+
+			for _, dir := range dirList {
+				pool.Submit(dir)
+			}
 		})
-		w.Wait()
+
+		diskList.Each(func(disk string) {
+			pool.Submit(disk)
+		})
+		pool.Wait()
 		bar.Success("scanned go.mod")
 	}
 
@@ -372,4 +414,22 @@ func getModTime(path string) time.Time {
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil || os.IsExist(err)
+}
+
+func dirList(path string) []*DeviceItem {
+	files, _ := ioutil.ReadDir(path)
+
+	var deviceList []*DeviceItem
+	for _, item := range files {
+		if item.Name() == "" {
+			continue
+		}
+
+		deviceList = append(deviceList, &DeviceItem{
+			Path:  filepath.ToSlash(filepath.Join(path, item.Name())),
+			IsDir: item.IsDir(),
+		})
+	}
+
+	return deviceList
 }
