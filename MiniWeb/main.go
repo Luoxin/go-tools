@@ -44,7 +44,6 @@ func main() {
 		log.Info(ctx.String())
 		log.Info(string(ctx.Body()))
 
-		log.Info(ctx.Request().Header)
 		return ctx.SendStatus(200)
 	})
 

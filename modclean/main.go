@@ -77,9 +77,9 @@ type DeviceItem struct {
 }
 
 type WorkPool struct {
-	data  chan interface{}
-	w     sync.WaitGroup
-	lock  sync.Mutex
+	data chan interface{}
+	w    sync.WaitGroup
+	//lock  sync.Mutex
 	logic func(i interface{})
 }
 
@@ -390,16 +390,16 @@ func DirSizeB(path string) int64 {
 	return size
 }
 
-func getFileSize(path string) int64 {
-	if !exists(path) {
-		return 0
-	}
-	fileInfo, err := os.Stat(path)
-	if err != nil {
-		return 0
-	}
-	return fileInfo.Size()
-}
+//func getFileSize(path string) int64 {
+//	if !exists(path) {
+//		return 0
+//	}
+//	fileInfo, err := os.Stat(path)
+//	if err != nil {
+//		return 0
+//	}
+//	return fileInfo.Size()
+//}
 
 func getModTime(path string) time.Time {
 	if !exists(path) {
