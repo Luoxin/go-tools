@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
+	"net"
+	"net/url"
+	"time"
+
 	"github.com/alexflint/go-arg"
 	"github.com/apex/log"
 	"github.com/cloverstd/tcping/ping"
 	"github.com/darabuchi/enputi/utils"
 	"github.com/ncruces/go-dns"
-	"math/rand"
-	"net"
-	"net/url"
-	"time"
 )
 
 const timeout = time.Millisecond * 500
