@@ -4,12 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/alexflint/go-arg"
-	"github.com/darabuchi/enputi/utils"
-	"github.com/elliotchance/pie/pie"
-	"github.com/karrick/godirwalk"
-	"github.com/pterm/pterm"
-	"github.com/rogpeppe/go-internal/modfile"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -18,13 +12,21 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/alexflint/go-arg"
+	"github.com/darabuchi/enputi/utils"
+	"github.com/darabuchi/log"
+	"github.com/elliotchance/pie/pie"
+	"github.com/karrick/godirwalk"
+	"github.com/pterm/pterm"
+	"github.com/rogpeppe/go-internal/modfile"
 )
 
 type ModInfo struct {
-	ModTime  time.Time
-	FilePath string
-	Version  string
-	Name     string
+	ModTime      time.Time
+	FilePathList []string
+	Version      string
+	Name         string
 }
 
 type GoEnv struct {
@@ -69,6 +71,8 @@ type GoEnv struct {
 
 var cmdArgs struct {
 	DeepClean bool `arg:"-d,--deep-clean" help:"deep clean"`
+	OnlyShow  bool `arg:"-s,--only-show" help:"only show"`
+	Debug     bool `arg:"-v,--verbose" help:"verbose"`
 }
 
 type DeviceItem struct {
@@ -79,7 +83,7 @@ type DeviceItem struct {
 type WorkPool struct {
 	data chan interface{}
 	w    sync.WaitGroup
-	//lock  sync.Mutex
+	// lock  sync.Mutex
 	logic func(i interface{})
 }
 
@@ -119,7 +123,11 @@ func (p *WorkPool) Wait() {
 }
 
 func main() {
+	log.SetOutput(ioutil.Discard)
 	arg.MustParse(&cmdArgs)
+	if cmdArgs.Debug {
+		pterm.EnableDebugMessages()
+	}
 
 	ptermLogo, _ := pterm.DefaultBigText.WithLetters(
 		pterm.NewLettersFromStringWithStyle("mod", pterm.NewStyle(pterm.FgLightCyan)),
@@ -146,11 +154,11 @@ func main() {
 	var goEnv GoEnv
 	err = json.Unmarshal(out.Bytes(), &goEnv)
 	if err != nil {
-		pterm.Error.Sprintf("err:%v", err)
+		pterm.Error.Sprintf("get go mod cache path err:%v", err)
 		return
 	}
 
-	modRoot := strings.TrimSuffix(filepath.ToSlash(strings.TrimSuffix(goEnv.GOMODCACHE, "\n")), "/") + "/"
+	modRoot := filepath.ToSlash(goEnv.GOMODCACHE)
 
 	pterm.Success.Printfln("go mod cache is %v", modRoot)
 
@@ -172,12 +180,11 @@ func main() {
 			}
 
 			if !info.IsDir() {
-				//bar.UpdateText(pterm.FgLightMagenta.Sprintf("%v is not dir,skip", info.Name()))
 				return nil
 			}
 
 			if !strings.Contains(info.Name(), "@") {
-				//bar.UpdateText(pterm.FgLightMagenta.Sprintf("%v is not go.mod path,skip", info.Name()))
+				// bar.UpdateText(pterm.FgLightMagenta.Sprintf("%v is not go.mod path,skip", info.Name()))
 				return nil
 			}
 
@@ -188,26 +195,58 @@ func main() {
 
 			modName := strings.Split(modFullName, "@")[0]
 			if strings.TrimSpace(modName) == "" {
-				//bar.UpdateText(pterm.FgLightMagenta.Sprintf("%v is not go.mod path,skip", info.Name()))
 				return nil
 			}
 
-			modInfo := &ModInfo{
-				FilePath: osPathname,
-				Version:  strings.Split(modFullName, "@")[1],
-				Name:     modName,
-				ModTime:  getModTime(osPathname),
+			// 如果是@v，证明还没有到最下层
+			if info.Name() == "@v" {
+				buf, err := utils.FileRead(filepath.Join(osPathname, "list"))
+				if err != nil {
+					return nil
+				}
+
+				versionList := pie.Strings(strings.Split(string(buf), "\n")).FilterNot(func(s string) bool {
+					return s == ""
+				}).Sort().Reverse()
+				versionList.Pop()
+				versionList.Each(func(s string) {
+					modInfo := &ModInfo{
+						FilePathList: []string{
+							filepath.Join(osPathname, s+".mod"),
+							filepath.Join(osPathname, s+".info"),
+							filepath.Join(osPathname, s+".zip"),
+							filepath.Join(osPathname, s+".lock"),
+							filepath.Join(osPathname, s+".ziphash"),
+						},
+						Version: s,
+						Name:    modName,
+						ModTime: getModTime(filepath.Join(osPathname, s+".mod")),
+					}
+
+					cacheMap[modName] = append(cacheMap[modName], modInfo)
+
+					bar.UpdateText(pterm.FgLightCyan.Sprintf("%s@%s in cache", modInfo.Name, modInfo.Version))
+				})
+
+				return filepath.SkipDir
+			} else {
+				modInfo := &ModInfo{
+					FilePathList: []string{osPathname},
+					Version:      strings.Split(modFullName, "@")[1],
+					Name:         modName,
+					ModTime:      getModTime(osPathname),
+				}
+
+				cacheMap[modName] = append(cacheMap[modName], modInfo)
+
+				bar.UpdateText(pterm.FgLightCyan.Sprintf("%s@%s in cache", modInfo.Name, modInfo.Version))
+
+				return filepath.SkipDir
 			}
-
-			cacheMap[modName] = append(cacheMap[modName], modInfo)
-
-			bar.UpdateText(pterm.FgLightCyan.Sprintf("%s@%s in cache", modInfo.Name, modInfo.Version))
-
-			return filepath.SkipDir
 		},
 	})
 	if err != nil {
-		bar.FailPrinter.Printfln("err:%v", err)
+		bar.FailPrinter.Printfln("wail go mod err:%v", err)
 		return
 	}
 	bar.Success("scanned go mod cache")
@@ -215,14 +254,13 @@ func main() {
 	usedMap := map[string]bool{}
 	usedModMap := map[string]bool{}
 	if cmdArgs.DeepClean {
-
 		var diskList pie.Strings
 		switch runtime.GOOS {
 		case "windows":
-			//for i := 'A'; i < 'Z'; i++ {
-			//	diskList = append(diskList, fmt.Sprintf("%c:/", i))
-			//}
-			diskList = append(diskList, "D:/")
+			for i := 'A'; i < 'Z'; i++ {
+				diskList = append(diskList, fmt.Sprintf("%c:/", i))
+			}
+			// diskList = append(diskList, "D:/")
 		default:
 			diskList = append(diskList, "/")
 		}
@@ -313,26 +351,32 @@ func main() {
 			var removeSize int64
 
 			remove := func(val *ModInfo) {
-				bar.UpdateText(pterm.FgYellow.Sprintf("will remove %s", val.FilePath))
+				for _, file := range val.FilePathList {
+					size := DirSizeB(file)
 
-				size := DirSizeB(val.FilePath)
-				err = os.RemoveAll(val.FilePath)
-				if err != nil {
-					pterm.Error.Printfln("err:%v", err)
-					return
+					if !cmdArgs.OnlyShow {
+						err = os.RemoveAll(file)
+						if err != nil {
+							// pterm.Error.Printfln("err:%v", err)
+							continue
+						}
+						bar.UpdateText(pterm.FgYellow.Sprintf("will remove %s(size:%s)", file, formatFileSize(size)))
+					} else {
+						bar.Success(pterm.FgYellow.Sprintf("will remove %s(size:%s)", file, formatFileSize(size)))
+					}
+
+					allRemoveCount++
+					allRemoveSize += size
+
+					removeCount++
+					removeSize += size
 				}
-
-				allRemoveCount++
-				allRemoveSize += size
-
-				removeCount++
-				removeSize += size
 			}
 
 			for _, val := range values {
 				if usedModMap[key] {
 					if lastVal.ModTime.Sub(val.ModTime) < 0 {
-						if lastVal.FilePath != "" {
+						if len(lastVal.FilePathList) > 0 {
 							if !usedMap[fmt.Sprintf("%s@%s", lastVal.Name, lastVal.Version)] {
 								remove(lastVal)
 							}
@@ -364,7 +408,7 @@ func main() {
 
 func formatFileSize(fileSize int64) (size string) {
 	if fileSize < 1024 {
-		//return strconv.FormatInt(fileSize, 10) + "B"
+		// return strconv.FormatInt(fileSize, 10) + "B"
 		return fmt.Sprintf("%.2fB", float64(fileSize)/float64(1))
 	} else if fileSize < (1024 * 1024) {
 		return fmt.Sprintf("%.2fKB", float64(fileSize)/float64(1024))
@@ -374,14 +418,17 @@ func formatFileSize(fileSize int64) (size string) {
 		return fmt.Sprintf("%.2fGB", float64(fileSize)/float64(1024*1024*1024))
 	} else if fileSize < (1024 * 1024 * 1024 * 1024 * 1024) {
 		return fmt.Sprintf("%.2fTB", float64(fileSize)/float64(1024*1024*1024*1024))
-	} else { //if fileSize < (1024 * 1024 * 1024 * 1024 * 1024 * 1024)
+	} else { // if fileSize < (1024 * 1024 * 1024 * 1024 * 1024 * 1024)
 		return fmt.Sprintf("%.2fEB", float64(fileSize)/float64(1024*1024*1024*1024*1024))
 	}
 }
 
 func DirSizeB(path string) int64 {
 	var size int64
-	_ = filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if info == nil {
+			return err
+		}
 		if !info.IsDir() {
 			size += info.Size()
 		}
@@ -390,7 +437,7 @@ func DirSizeB(path string) int64 {
 	return size
 }
 
-//func getFileSize(path string) int64 {
+// func getFileSize(path string) int64 {
 //	if !exists(path) {
 //		return 0
 //	}
@@ -399,7 +446,7 @@ func DirSizeB(path string) int64 {
 //		return 0
 //	}
 //	return fileInfo.Size()
-//}
+// }
 
 func getModTime(path string) time.Time {
 	if !exists(path) {

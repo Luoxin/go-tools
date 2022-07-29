@@ -1,0 +1,77 @@
+project_name: fastip4github
+env:
+    - GO111MODULE=on
+    - GOSUMDB=off
+    - GOPROXY=https://goproxy.cn,direct
+    - CGO_ENABLED=0
+before:
+    hooks:
+        - go mod tidy
+builds:
+    -   id: fastip4github
+        ldflags:
+            - -s -w
+        gcflags:
+            - -N -l
+        flags:
+            - -v
+        binary: fastip4github
+        hooks:
+            post:
+                - upx -9vf --ultra-brute "{{ .Path }}"
+        targets:
+            - darwin_amd64
+            - darwin_arm64
+#            - dragonfly_amd64
+#            - freebsd_386
+#            - freebsd_amd64
+#            - freebsd_arm
+#            - freebsd_arm64
+#            - linux_386
+            - linux_amd64
+            - linux_arm
+            - linux_arm64
+#            - linux_mips
+#            - linux_mips64
+#            - linux_mips64le
+#            - linux_mipsle
+#            - linux_ppc64
+#            - linux_ppc64le
+#            - linux_riscv64
+#            - linux_s390x
+#            - netbsd_386
+#            - netbsd_amd64
+#            - netbsd_arm
+#            - netbsd_arm64
+#            - openbsd_386
+#            - openbsd_amd64
+#            - openbsd_arm
+#            - openbsd_arm64
+#            - openbsd_mips64
+#            - plan9_386
+#            - plan9_amd64
+#            - plan9_arm
+#            - solaris_amd64
+            - windows_386
+            - windows_amd64
+#            - windows_arm
+#            - windows_arm64
+        gomips:
+            - hardfloat
+            - softfloat
+checksum:
+    name_template: "{{.ProjectName}}_{{ .Tag }}_checksums.txt"
+    algorithm: sha512
+archives:
+    -   format: tar.gz
+        format_overrides:
+            -   goos: windows
+                format: zip
+        replacements:
+            amd64: 64bit
+            386: 32bit
+            darwin: macos
+            freebsd: freebsdupx
+            dragonfly: dragonflybsd
+        files:
+            - README.md
