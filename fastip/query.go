@@ -126,11 +126,17 @@ func (p *IpOptimization) Exec() error {
 				return err
 			}
 
+			if len(ips) <= 0 {
+				pterm.Debug.Printfln("not found ips for %s", domain)
+				return errors.New("not found any ips")
+			}
+
 			p.incrBy(len(ips))
 
 			ip, delay, err := p.ipOptimization(domain, ips)
 			if err != nil {
 				log.Errorf("err:%v", err)
+				pterm.Error.Printfln("%s %s", domain, err.Error())
 				return err
 			}
 
@@ -167,7 +173,7 @@ func (p *IpOptimization) Exec() error {
 			if err != nil {
 				log.Errorf("err:%v", err)
 				pterm.Warning.Printfln("读取远端hosts文件失败")
-				for _, s := range failMap {
+				for s := range failMap {
 					pterm.Error.Printfln("%s 检测失败", s)
 				}
 			} else {
@@ -176,7 +182,7 @@ func (p *IpOptimization) Exec() error {
 				if err != nil {
 					log.Errorf("err:%v", err)
 					pterm.Warning.Printfln("解析远端hosts文件失败")
-					for _, s := range failMap {
+					for s := range failMap {
 						pterm.Error.Printfln("%s 检测失败", s)
 					}
 				} else {
@@ -232,12 +238,12 @@ func (p *IpOptimization) ipOptimization(domain string, ips pie.Strings) (string,
 		p.increment("check %s", domain)
 
 		dial, err := direct.DialContext(context.TODO(), &constant.Metadata{
-			NetWork:  constant.TCP,
-			DstIP:    net.ParseIP(ip),
-			DstPort:  "443",
-			AddrType: constant.AtypDomainName,
-			Host:     domain,
-			DNSMode:  constant.DNSFakeIP,
+			NetWork: constant.TCP,
+			Type:    constant.HTTPCONNECT,
+			DstIP:   net.ParseIP(ip),
+			DstPort: "443",
+			Host:    domain,
+			DNSMode: constant.DNSMapping,
 		})
 		if err != nil {
 			log.Errorf("err:%v", err)
@@ -271,6 +277,7 @@ func (p *IpOptimization) ipOptimization(domain string, ips pie.Strings) (string,
 		delay := time.Since(start)
 		if err != nil {
 			log.Errorf("err:%v", err)
+			pterm.Debug.Printfln("%s %s fail", domain, ip)
 			return
 		}
 
@@ -360,9 +367,37 @@ func (p *IpOptimization) dnsQuery(nameserver, domain string) ([]net.IPAddr, erro
 		}
 	}
 
+	cnameMap := map[string]bool{
+		domain: true,
+	}
+	for {
+		cname, err := client.LookupCNAME(context.TODO(), domain)
+		if err != nil {
+			log.Errorf("err:%v", err)
+			break
+		}
+		if cname == "" {
+			break
+		}
+
+		cname = strings.TrimSuffix(cname, ".")
+		if cnameMap[cname] {
+			break
+		}
+
+		if domain == cname {
+			break
+		}
+
+		pterm.Debug.Printfln("%s cname %s (%s)", domain, cname, nameserver)
+		domain = cname
+		cnameMap[cname] = true
+	}
+
 	ips, err := client.LookupIPAddr(context.TODO(), domain)
 	if err != nil {
 		log.Errorf("err:%v", err)
+		pterm.Debug.Printfln("%s not found ip (%s)", domain, nameserver)
 		return nil, err
 	}
 

@@ -7,12 +7,12 @@ import (
 	"github.com/elliotchance/pie/pie"
 )
 
-//go:embed domain.fuck
-var domainBuf string
-var domainList pie.Strings
+//go:embed dns.fuck
+var dnsBuf string
+var dnsList pie.Strings
 
 func init() {
-	domainList = pie.Strings(strings.Split(domainBuf, "\n")).
+	dnsList = pie.Strings(strings.Split(dnsBuf, "\n")).
 			FilterNot(func(s string) bool {
 				return s == ""
 			}).
